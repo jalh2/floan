@@ -18,7 +18,19 @@ const createProduct = async (req, res) => {
 
 const getProducts = async (req, res) => {
   try {
-    const products = await Product.find();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const totalCount = await Product.countDocuments();
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Get paginated products
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
     
     // Get transactions for each product to calculate totals
     const productsWithTotals = await Promise.all(products.map(async (product) => {
@@ -50,7 +62,18 @@ const getProducts = async (req, res) => {
       };
     }));
 
-    res.json(productsWithTotals);
+    // Send response with products and pagination info
+    res.json({
+      products: productsWithTotals,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems: totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
