@@ -8,6 +8,15 @@ router.post('/', transactionController.createTransaction);
 // Get all transactions
 router.get('/', transactionController.getTransactions);
 
+// Get transactions by date range
+router.get('/range', transactionController.getTransactionsByDateRange);
+
+// Get sales report (daily/weekly/monthly/yearly)
+router.get('/report', transactionController.getSalesReport);
+
+// Get top selling products
+router.get('/top-products', transactionController.getTopProducts);
+
 // Get transactions by product (must come before /:id)
 router.get('/product/:productId', transactionController.getTransactionsByProduct);
 
