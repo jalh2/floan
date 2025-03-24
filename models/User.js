@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
     required: true,
     default: 'employee'
   },
+  store: {
+    type: String,
+    required: true,
+    trim: true
+  },
   createdAt: {
     type: Date,
     default: Date.now

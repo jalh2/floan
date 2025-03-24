@@ -8,6 +8,11 @@ const createProduct = async (req, res) => {
       image: req.file ? `/uploads/${req.file.filename}` : null
     };
 
+    // Ensure store is provided
+    if (!productData.store) {
+      throw new Error('Store is required');
+    }
+
     const product = new Product(productData);
     await product.save();
     res.status(201).json(product);
@@ -20,14 +25,19 @@ const getProducts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+    const store = req.query.store;
     const skip = (page - 1) * limit;
 
-    // Get total count for pagination
-    const totalCount = await Product.countDocuments();
+    if (!store) {
+      return res.status(400).json({ error: 'Store parameter is required' });
+    }
+
+    // Get total count for pagination with store filter
+    const totalCount = await Product.countDocuments({ store });
     const totalPages = Math.ceil(totalCount / limit);
 
-    // Get paginated products
-    const products = await Product.find()
+    // Get paginated products for specific store
+    const products = await Product.find({ store })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -49,8 +59,11 @@ const getProducts = async (req, res) => {
         );
         if (productSold) {
           totalQuantitySold += productSold.quantity;
-          totalLRD += productSold.priceLRD * productSold.quantity;
-          totalUSD += productSold.priceUSD * productSold.quantity;
+          if (transaction.currency === 'LRD') {
+            totalLRD += productSold.quantity * productSold.price;
+          } else {
+            totalUSD += productSold.quantity * productSold.price;
+          }
         }
       });
 
@@ -62,16 +75,14 @@ const getProducts = async (req, res) => {
       };
     }));
 
-    // Send response with products and pagination info
     res.json({
       products: productsWithTotals,
       pagination: {
         currentPage: page,
         totalPages,
-        totalItems: totalCount,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
-        limit
+        totalItems: totalCount
       }
     });
   } catch (error) {
@@ -102,8 +113,11 @@ const getProductById = async (req, res) => {
       );
       if (productSold) {
         totalQuantitySold += productSold.quantity;
-        totalLRD += productSold.priceLRD * productSold.quantity;
-        totalUSD += productSold.priceUSD * productSold.quantity;
+        if (transaction.currency === 'LRD') {
+          totalLRD += productSold.quantity * productSold.price;
+        } else {
+          totalUSD += productSold.quantity * productSold.price;
+        }
       }
     });
 

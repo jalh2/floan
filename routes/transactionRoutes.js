@@ -17,8 +17,8 @@ router.get('/report', transactionController.getSalesReport);
 // Get top selling products
 router.get('/top-products', transactionController.getTopProducts);
 
-// Get transactions by product (must come before /:id)
-router.get('/product/:productId', transactionController.getTransactionsByProduct);
+// Get transactions by product and store (must come before /:id)
+router.get('/product/:productId/:store', transactionController.getTransactionsByProduct);
 
 // Get transactions by date (must come before /:id)
 router.get('/date/:date', transactionController.getTransactionsByDate);
