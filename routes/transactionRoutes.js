@@ -17,13 +17,13 @@ router.get('/report', transactionController.getSalesReport);
 // Get top selling products
 router.get('/top-products', transactionController.getTopProducts);
 
-// Get transactions by product and store (must come before /:id)
-router.get('/product/:productId/:store', transactionController.getTransactionsByProduct);
+// Get transactions by product
+router.get('/product/:productId', transactionController.getTransactionsByProduct);
 
-// Get transactions by date (must come before /:id)
+// Get transactions by date
 router.get('/date/:date', transactionController.getTransactionsByDate);
 
-// Get a specific transaction (must come last)
+// Get a specific transaction
 router.get('/:id', transactionController.getTransactionById);
 
 module.exports = router;

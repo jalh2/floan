@@ -8,11 +8,6 @@ const createProduct = async (req, res) => {
       image: req.file ? `/uploads/${req.file.filename}` : null
     };
 
-    // Ensure store is provided
-    if (!productData.store) {
-      throw new Error('Store is required');
-    }
-
     const product = new Product(productData);
     await product.save();
     res.status(201).json(product);
@@ -25,19 +20,14 @@ const getProducts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const store = req.query.store;
     const skip = (page - 1) * limit;
 
-    if (!store) {
-      return res.status(400).json({ error: 'Store parameter is required' });
-    }
-
-    // Get total count for pagination with store filter
-    const totalCount = await Product.countDocuments({ store });
+    // Get total count for pagination
+    const totalCount = await Product.countDocuments();
     const totalPages = Math.ceil(totalCount / limit);
 
-    // Get paginated products for specific store
-    const products = await Product.find({ store })
+    // Get paginated products
+    const products = await Product.find()
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

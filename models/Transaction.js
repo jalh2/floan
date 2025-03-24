@@ -1,14 +1,9 @@
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
-  date: { type: Date, required: true, default: Date.now },
-  type: { type: String, required: true, enum: ['sale', 'restock'], default: 'sale' },
-  currency: { type: String, required: true, enum: ['LRD', 'USD'], default: 'LRD' },
-  store: {
-    type: String,
-    required: true,
-    trim: true
-  },
+  date: { type: Date, default: Date.now },
+  type: { type: String, required: true, enum: ['sale', 'purchase'] },
+  currency: { type: String, required: true, enum: ['USD', 'LRD'] },
   productsSold: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     productName: { type: String, required: true }, 
@@ -19,7 +14,7 @@ const transactionSchema = new mongoose.Schema({
     }
   }],
   totalLRD: { 
-    type: Number, 
+    type: Number,
     required: function() { return this.currency === 'LRD'; },
     default: 0
   },
@@ -32,6 +27,5 @@ const transactionSchema = new mongoose.Schema({
 });
 
 // Create index for store and date for efficient querying of store transactions
-transactionSchema.index({ store: 1, date: -1 });
 
-module.exports = mongoose.model('Transaction', transactionSchema);
+module.exports = mongoose.model('transactions', transactionSchema);

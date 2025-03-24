@@ -21,11 +21,6 @@ const userSchema = new mongoose.Schema({
     required: true,
     default: 'employee'
   },
-  store: {
-    type: String,
-    required: true,
-    trim: true
-  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -59,4 +54,4 @@ userSchema.methods.comparePassword = function(candidatePassword) {
   return this.password === hash;
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('users', userSchema);

@@ -5,11 +5,7 @@ const Product = require('../models/Product');
 
 const createTransaction = async (req, res) => {
   try {
-    const { productsSold, currency, store } = req.body;
-
-    if (!store) {
-      return res.status(400).json({ error: 'Store is required' });
-    }
+    const { productsSold, currency } = req.body;
 
     // Calculate total only for selected currency
     let total = 0;
@@ -17,9 +13,9 @@ const createTransaction = async (req, res) => {
 
     // Validate products and calculate total
     for (const item of productsSold) {
-      const product = await Product.findOne({ _id: item.product, store });
+      const product = await Product.findById(item.product);
       if (!product) {
-        return res.status(404).json({ error: `Product ${item.product} not found in store ${store}` });
+        return res.status(404).json({ error: `Product ${item.product} not found` });
       }
       if (product.pieces < item.quantity) {
         return res.status(400).json({ error: `Insufficient quantity for product ${product.item}` });
@@ -64,12 +60,7 @@ const createTransaction = async (req, res) => {
 
 const getTransactions = async (req, res) => {
   try {
-    const { store } = req.query;
-    if (!store) {
-      return res.status(400).json({ error: 'Store parameter is required' });
-    }
-
-    const transactions = await Transaction.find({ store })
+    const transactions = await Transaction.find()
       .sort({ date: -1 })
       .limit(50);
     res.json(transactions);
@@ -81,13 +72,7 @@ const getTransactions = async (req, res) => {
 const getTransactionById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { store } = req.query;
-
-    if (!store) {
-      return res.status(400).json({ error: 'Store parameter is required' });
-    }
-
-    const transaction = await Transaction.findOne({ _id: id, store });
+    const transaction = await Transaction.findById(id);
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
@@ -99,12 +84,8 @@ const getTransactionById = async (req, res) => {
 
 const getTransactionsByDate = async (req, res) => {
   try {
-    const { date, store } = req.query;
+    const { date } = req.query;
     
-    if (!store) {
-      return res.status(400).json({ error: 'Store parameter is required' });
-    }
-
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
     
@@ -112,7 +93,6 @@ const getTransactionsByDate = async (req, res) => {
     endDate.setHours(23, 59, 59, 999);
 
     const transactions = await Transaction.find({
-      store,
       date: {
         $gte: startDate,
         $lte: endDate
@@ -127,21 +107,24 @@ const getTransactionsByDate = async (req, res) => {
 
 const getTransactionsByProduct = async (req, res) => {
   try {
-    const { productId, store } = req.params;
+    const { productId } = req.params;
     const transactions = await Transaction.find({
       'productsSold.product': productId,
-      store,
       type: 'sale'
-    }).populate('productsSold.product');
+    });
 
     // Calculate totals
     const totals = transactions.reduce((acc, transaction) => {
+      // Find the specific product in productsSold array
+      const productSold = transaction.productsSold.find(p => p.product === productId);
+      if (!productSold) return acc;
+
       if (transaction.currency === 'LRD') {
-        acc.totalLRD += transaction.totalLRD;
+        acc.totalLRD += transaction.totalLRD || 0;
       } else {
-        acc.totalUSD += transaction.totalUSD;
+        acc.totalUSD += transaction.totalUSD || 0;
       }
-      acc.totalQuantity += transaction.productsSold[0].quantity;
+      acc.totalQuantity += productSold.quantity;
       return acc;
     }, { totalLRD: 0, totalUSD: 0, totalQuantity: 0 });
 
@@ -150,18 +133,15 @@ const getTransactionsByProduct = async (req, res) => {
       totals
     });
   } catch (error) {
+    console.error('Error in getTransactionsByProduct:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
 const getTransactionsByDateRange = async (req, res) => {
   try {
-    const { startDate, endDate, store } = req.query;
+    const { startDate, endDate } = req.query;
     
-    if (!store) {
-      return res.status(400).json({ error: 'Store parameter is required' });
-    }
-
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     
@@ -169,7 +149,6 @@ const getTransactionsByDateRange = async (req, res) => {
     end.setHours(23, 59, 59, 999);
 
     const transactions = await Transaction.find({
-      store,
       date: {
         $gte: start,
         $lte: end
@@ -208,37 +187,61 @@ const getTransactionsByDateRange = async (req, res) => {
 
 const getSalesReport = async (req, res) => {
   try {
-    const { startDate, endDate, store, allStores } = req.query;
+    const { period, date } = req.query;
     
-    if (!allStores && !store) {
-      return res.status(400).json({ error: 'Either store parameter or allStores flag is required' });
+    if (!period || !date) {
+      return res.status(400).json({ error: 'Period and date parameters are required' });
     }
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    const reportDate = new Date(date);
+    let startDate = new Date(reportDate);
+    let endDate = new Date(reportDate);
 
-    // Build query based on whether we want all stores or a specific store
+    // Set time ranges based on period
+    switch (period) {
+      case 'daily':
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'weekly':
+        // Set to start of week (Sunday)
+        startDate.setDate(reportDate.getDate() - reportDate.getDay());
+        startDate.setHours(0, 0, 0, 0);
+        // Set to end of week (Saturday)
+        endDate.setDate(startDate.getDate() + 6);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'monthly':
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setMonth(reportDate.getMonth() + 1);
+        endDate.setDate(0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'yearly':
+        startDate.setMonth(0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setMonth(11, 31);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid period. Must be daily, weekly, monthly, or yearly' });
+    }
+
+    // Build query
     const query = {
       type: 'sale',
       date: {
-        $gte: start,
-        $lte: end
+        $gte: startDate,
+        $lte: endDate
       }
     };
-
-    if (!allStores) {
-      query.store = store;
-    }
 
     const transactions = await Transaction.find(query).sort({ date: -1 });
 
     // Process transactions for report
     let dailyTotals = {};
     let productTotals = {};
-    let storeTotals = {};
     let overallTotals = { totalLRD: 0, totalUSD: 0, totalItems: 0, totalTransactions: 0 };
 
     transactions.forEach(transaction => {
@@ -266,38 +269,16 @@ const getSalesReport = async (req, res) => {
       dailyTotals[dateKey].transactions += 1;
       overallTotals.totalTransactions += 1;
 
-      // Process store totals
-      if (!storeTotals[transaction.store]) {
-        storeTotals[transaction.store] = {
-          store: transaction.store,
-          totalLRD: 0,
-          totalUSD: 0,
-          transactions: 0,
-          items: 0
-        };
-      }
-
-      // Update store totals
-      if (transaction.totalLRD) {
-        storeTotals[transaction.store].totalLRD += transaction.totalLRD;
-      }
-      if (transaction.totalUSD) {
-        storeTotals[transaction.store].totalUSD += transaction.totalUSD;
-      }
-      storeTotals[transaction.store].transactions += 1;
-
       // Process product totals and item counts
       transaction.productsSold.forEach(product => {
         const quantity = product.quantity || 0;
         dailyTotals[dateKey].items += quantity;
-        storeTotals[transaction.store].items += quantity;
         overallTotals.totalItems += quantity;
 
-        const productKey = `${product.productName}_${transaction.store}`;
+        const productKey = product.productName;
         if (!productTotals[productKey]) {
           productTotals[productKey] = {
             name: product.productName,
-            store: transaction.store,
             quantitySold: 0,
             totalLRD: 0,
             totalUSD: 0
@@ -324,15 +305,16 @@ const getSalesReport = async (req, res) => {
     );
 
     res.json({
+      period,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
       dailyTotals: sortedDailyTotals,
       productTotals: sortedProductTotals,
-      storeTotals: allStores ? Object.values(storeTotals) : undefined,
       summary: {
         totalTransactions: overallTotals.totalTransactions,
         totalItems: overallTotals.totalItems,
         totalLRD: overallTotals.totalLRD,
-        totalUSD: overallTotals.totalUSD,
-        storeCount: allStores ? Object.keys(storeTotals).length : 1
+        totalUSD: overallTotals.totalUSD
       }
     });
   } catch (error) {
@@ -342,7 +324,7 @@ const getSalesReport = async (req, res) => {
 
 const getTopProducts = async (req, res) => {
   try {
-    const { startDate, endDate, store } = req.query;
+    const { startDate, endDate } = req.query;
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
     end.setHours(23, 59, 59, 999);
@@ -351,7 +333,6 @@ const getTopProducts = async (req, res) => {
       {
         $match: {
           date: { $gte: start, $lte: end },
-          store,
           type: 'sale'
         }
       },
