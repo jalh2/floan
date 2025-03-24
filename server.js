@@ -7,7 +7,7 @@ const fs = require('fs');
 const productRoutes = require('./routes/productRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const userRoutes = require('./routes/userRoutes');
-
+ 
 const app = express();
 
 // Create uploads directory if it doesn't exist
